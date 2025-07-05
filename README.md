@@ -1,5 +1,5 @@
 # ClustGDD
-The code for paper "Simple yet Effective Graph Distillation via Clustering"
+The code for paper ["Simple yet Effective Graph Distillation via Clustering"](https://arxiv.org/abs/2505.20807) published at KDD 2025
 
 ## Brief Introduction
 This paper proposes a simple yet effective approach ClustGDD for graph data distillation. ClustGDD achieves superior performance in condensation effectiveness and efficiency over previous GDD solutions on
