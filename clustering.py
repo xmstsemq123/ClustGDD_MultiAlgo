@@ -11,6 +11,8 @@ minibatch_kmeans  sklearn MiniBatchKMeans (the original paper on ogbn-arxiv / re
 balanced_kmeans   [ours] capacity-constrained Lloyd iterations: every cluster holds at most
                   ceil((1+eps) * N / n) nodes. Motivated by Theorem 3.1 of the paper,
                   whose FID bound shrinks with the variance of the cluster sizes.
+class_kmeans      [ours, ablation] K-Means inside each predicted class, clusters allocated by class size
+class_balanced_kmeans [ours] balanced_kmeans inside each predicted class (class-pure AND balanced)
 random_balanced   negative control: random partition into equal-size clusters
 gmm               Gaussian mixture (diagonal covariance)
 ward              agglomerative clustering, Ward linkage (O(N^2) memory, small graphs only)
@@ -24,7 +26,7 @@ import torch
 from sklearn.cluster import AgglomerativeClustering, KMeans, MiniBatchKMeans, SpectralClustering
 from sklearn.mixture import GaussianMixture
 
-METHODS = ['kmeans', 'minibatch_kmeans', 'balanced_kmeans', 'random_balanced', 'gmm', 'ward', 'spectral']
+METHODS = ['kmeans', 'minibatch_kmeans', 'balanced_kmeans', 'class_kmeans', 'class_balanced_kmeans', 'random_balanced', 'gmm', 'ward', 'spectral']
 QUADRATIC_METHODS = {'ward', 'spectral'}
 MAX_QUADRATIC_N = 20000
 LARGE_DATASETS = {'ogbn-arxiv', 'reddit'}
@@ -110,6 +112,57 @@ def balanced_kmeans(H, n, init_labels, eps=0.0, max_iter=30, device='cuda'):
     return best_labels, {'balance_cap': cap, 'balance_iters_used': it_used}
 
 
+def allocate_clusters(class_sizes, n):
+    """Split n clusters over classes proportionally to class size (largest-remainder rounding).
+
+    Every non-empty class gets at least one cluster (when n allows) and never more clusters than nodes.
+    """
+    class_sizes = np.asarray(class_sizes, dtype=np.int64)
+    present = np.flatnonzero(class_sizes > 0)
+    alloc = np.zeros_like(class_sizes)
+    if n >= present.size:
+        alloc[present] = 1
+    quota = class_sizes / class_sizes.sum() * n
+    while alloc.sum() < n:
+        room = (alloc < class_sizes)
+        gap = np.where(room, quota - alloc, -np.inf)
+        alloc[int(gap.argmax())] += 1
+    return alloc
+
+
+def class_aware(H, n, seed, dataset, minibatch, balanced, eps=0.0, max_iter=30, device='cuda'):
+    """[ours] Cluster each predicted class separately.
+
+    The n synthetic nodes are distributed over the classes predicted by H (argmax), proportionally
+    to class size, so every cluster is class-pure w.r.t. the prediction. With balanced=True each
+    class is split by balanced_kmeans; since every class gets ~N_c / (N / n) clusters, all clusters
+    end up with ~N/n nodes, i.e. globally balanced as Theorem 3.1 asks, without mixing classes.
+    """
+    pred = H.argmax(1)
+    K = H.shape[1]
+    alloc = allocate_clusters(np.bincount(pred, minlength=K), n)
+    labels = np.empty(H.shape[0], dtype=np.int64)
+    offset, iters = 0, []
+    for c in np.flatnonzero(alloc):
+        idx = np.flatnonzero(pred == c)
+        k = int(alloc[c])
+        if k == 1:
+            sub = np.zeros(idx.size, dtype=np.int64)
+        elif k == idx.size:
+            sub = np.arange(k)
+        else:
+            sub, _ = run_clustering(H[idx], k, default_method(dataset), seed, dataset, minibatch)
+            if balanced:
+                sub, binfo = balanced_kmeans(H[idx], k, sub, eps=eps, max_iter=max_iter, device=device)
+                iters.append(binfo['balance_iters_used'])
+        labels[idx] = sub + offset
+        offset += k
+    info = {'classes_with_clusters': int((alloc > 0).sum())}
+    if iters:
+        info['balance_iters_used'] = int(max(iters))
+    return labels, info
+
+
 def run_clustering(H, n, method, seed, dataset=None, minibatch=1000, eps=0.0,
                    max_iter=30, device='cuda'):
     """Return (labels[N] with exactly n non-empty clusters, extra info dict)."""
@@ -127,6 +180,9 @@ def run_clustering(H, n, method, seed, dataset=None, minibatch=1000, eps=0.0,
     elif method == 'balanced_kmeans':
         init, _ = run_clustering(H, n, default_method(dataset), seed, dataset, minibatch)
         labels, info = balanced_kmeans(H, n, init, eps=eps, max_iter=max_iter, device=device)
+    elif method in ('class_kmeans', 'class_balanced_kmeans'):
+        labels, info = class_aware(H, n, seed, dataset, minibatch, balanced=(method == 'class_balanced_kmeans'),
+                                   eps=eps, max_iter=max_iter, device=device)
     elif method == 'random_balanced':
         rng = np.random.RandomState(seed)
         labels = np.empty(N, dtype=np.int64)
@@ -199,6 +255,7 @@ def cluster_stats(H, labels, n, y_true, nclass):
         'syn_classes_covered': int((p_syn > 0).sum()),
         'label_dist_l1': float(np.abs(p_true - p_syn).sum()),
         'fid': fid, 'fid_mean_term': fid_mean, 'fid_cov_term': fid_cov,
+        'cluster_sizes': sorted(sizes.tolist(), reverse=True),
     }
 
 

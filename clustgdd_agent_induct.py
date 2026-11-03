@@ -136,7 +136,7 @@ class ClustGDD:
         info.update(cluster_stats(output_train_np, cluster_labels, self.nnodes_syn, np.asarray(data.labels_train), data.nclass))
         info['cluster_time'] = t_clu
         self.cluster_info = info
-        print('[cluster]', method, {k: (round(v, 4) if isinstance(v, float) else v) for k, v in info.items()})
+        print('[cluster]', method, {k: (round(v, 4) if isinstance(v, float) else v) for k, v in info.items() if k != 'cluster_sizes'})
         # self.cluster_measure(cluster_labels)
         print("finish clustering")    
         # get the train nodes representations and labels 
