@@ -3,7 +3,7 @@ python train_clustgdd_induct.py --gpu_id 0  --dataset flickr \
    --alpha 0.8 --predropout 0.6     --sp_ratio 0.5  --preep 2000   \
      --postep 2000    --frcoe 0.2 --predcoe 0.8 --w1 0.8 --save 1
 
-python train_clustgdd_induct.py --gpu_id 2  --dataset flickr \
+python train_clustgdd_induct.py --gpu_id 0  --dataset flickr \
   --reduction_rate 0.005    --prop_num 2 --postprop_num 1\
    --alpha 0.8 --predropout 0.6     --sp_ratio 0.5  --preep 2000  \
       --postep 2000   --frcoe 0.2 --predcoe 0.8 --w1 1.0 --save 1  
@@ -13,7 +13,7 @@ python train_clustgdd_induct.py --gpu_id 0  --dataset flickr \
    --alpha 0.8 --predropout 0.6     --sp_ratio 0.5  --preep 2000  \
       --postep 2000    --frcoe 0.2 --predcoe 0.8 --w1 0.8 --save 1 
 
-python train_clustgdd_induct.py --gpu_id 1  --dataset reddit \
+python train_clustgdd_induct.py --gpu_id 0  --dataset reddit \
  --reduction_rate 0.005  \
    --prop_num 20 --postprop_num 10    --alpha 0.95 \
     --predropout 0.6     --sp_ratio 0.1 \
@@ -27,7 +27,7 @@ python train_clustgdd_induct.py --gpu_id 0  --dataset reddit \
               --hidden 512     --frcoe 3.3  --predcoe 0.024 --w1 0.015 --save 1
 
 
-python train_clustgdd_induct.py --gpu_id 3 \
+python train_clustgdd_induct.py --gpu_id 0 \
                         --dataset reddit \
                         --reduction_rate 0.0005  \
                         --prop_num 10  --postprop_num 7    --alpha 0.92 --predropout 0.6   \

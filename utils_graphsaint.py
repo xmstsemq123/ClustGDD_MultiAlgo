@@ -1,3 +1,4 @@
+import os.path as osp
 import scipy.sparse as sp
 import numpy as np
 import sys
@@ -7,14 +8,17 @@ from sklearn.preprocessing import StandardScaler
 from torch_geometric.data import InMemoryDataset, Data
 import torch
 from itertools import repeat
-from torch_geometric.data import NeighborSampler
+try:
+    from torch_geometric.loader import NeighborSampler
+except ImportError:
+    from torch_geometric.data import NeighborSampler
 
 class DataGraphSAINT:
     '''datasets used in GraphSAINT paper'''
 
     def __init__(self, dataset, **kwargs):
         # Replace xxx with your path
-        dataset_str='xxx'+dataset+'/'
+        dataset_str=osp.join(osp.join(osp.dirname(osp.abspath(__file__)), 'data'), dataset)+'/'
         adj_full = sp.load_npz(dataset_str+'adj_full.npz')
         self.nnodes = adj_full.shape[0]
         if dataset == 'ogbn-arxiv':

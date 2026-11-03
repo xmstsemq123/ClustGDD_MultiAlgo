@@ -233,7 +233,7 @@ def graph_analysis(adj, feat, label, class_nums=1):
     if edge_num > 100000:
         n = node_homo.size(0)
         indices = torch.arange(n).unsqueeze(0).expand(2, n).to(node_homo.device)
-        sparse_diag_matrix = torch.sparse.FloatTensor(indices, 1./(node_homo.sum(-1)+1e-10), torch.Size([n, n])).to(node_homo.device)
+        sparse_diag_matrix = torch.sparse_coo_tensor(indices, 1./(node_homo.sum(-1)+1e-10), torch.Size([n, n])).to(node_homo.device)
         node_homo = sparse_diag_matrix @ node_homo 
     else:
         node_homo = ( torch.diag(1./(node_homo.sum(-1)+1e-10))@ node_homo)

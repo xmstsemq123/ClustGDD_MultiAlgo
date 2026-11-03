@@ -65,6 +65,14 @@ parser.add_argument('--save_norf',type=bool, default=False,)
 parser.add_argument('--notopo',type=bool, default=False,)
 parser.add_argument('--tm_rec',type=bool, default=False)
 
+parser.add_argument('--cluster_method', type=str, default=None,
+                    help='kmeans | minibatch_kmeans | balanced_kmeans | random_balanced | gmm | ward | spectral '
+                         '(default: what the original code uses for the dataset)')
+parser.add_argument('--balance_eps', type=float, default=0.0, help='balanced_kmeans: max cluster size = ceil((1+eps)N/n)')
+parser.add_argument('--balance_iters', type=int, default=30, help='balanced_kmeans: max Lloyd iterations')
+parser.add_argument('--results_file', type=str, default='results/results.jsonl')
+parser.add_argument('--tag', type=str, default='')
+
 args = parser.parse_args()
 
 torch.cuda.set_device(args.gpu_id)

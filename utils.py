@@ -13,18 +13,21 @@ import numpy as np
 import torch.nn.functional as F
 from sklearn.preprocessing import StandardScaler
 from deep_robust_utils import *
-from torch_geometric.data import NeighborSampler
+try:
+    from torch_geometric.loader import NeighborSampler
+except ImportError:
+    from torch_geometric.data import NeighborSampler
 from torch_geometric.utils import add_remaining_self_loops, to_undirected
 from torch_geometric.datasets import Planetoid
 
 
 def get_dataset(name, normalize_features=False, transform=None, if_dpr=True):
     # replace xxx with your path here 
-    path = osp.join('xxx/data', name)
+    path = osp.join(osp.join(osp.dirname(osp.abspath(__file__)), 'data'), name)
     if name in ['cora', 'citeseer', 'pubmed']:
         dataset = Planetoid(path, name)
     elif name in ['ogbn-arxiv']:
-        dataset = PygNodePropPredDataset(name='ogbn-arxiv')
+        dataset = PygNodePropPredDataset(name='ogbn-arxiv', root=osp.join(osp.dirname(osp.abspath(__file__)), 'data'))
     else:
         raise NotImplementedError
 

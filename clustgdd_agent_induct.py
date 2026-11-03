@@ -4,13 +4,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 import deep_robust_utils as utils
 from deep_robust_utils import sparse_mx_to_torch_sparse_tensor 
-from KDD2025_ClustGDD.utils_clustgdd import graph_analysis, ER_estimator, attaw_ER_estimator
+from utils_clustgdd import graph_analysis, ER_estimator, attaw_ER_estimator
 from copy import deepcopy
 import numpy as np
 from tqdm import tqdm
 from models.gcn import GCN,MLP_Induct
 import scipy.sparse as sp
 from scipy.sparse import coo_matrix
+from clustering import run_clustering, cluster_stats, cluster_means, default_method, timed, log_result
 from sklearn.cluster import KMeans,SpectralClustering, MiniBatchKMeans
 import random
 import argparse
@@ -125,15 +126,17 @@ class ClustGDD:
                 "accuracy= {:.4f}".format(acc_test.item()))
         
 
-        output_train_np = output_train.cpu().numpy() 
-        # parser.add_argument('--',type=int, default=1000, help='if the graph is large, using mini-batch clustering')
-        cluster_minibatch = self.args.cluster_minibatch
-        if self.args.dataset == 'reddit':
-            cluster = MiniBatchKMeans(n_clusters=self.nnodes_syn, random_state=self.args.seed, batch_size=cluster_minibatch).fit(output_train_np)
-        else:
-            cluster = KMeans(n_clusters = self.nnodes_syn).fit(output_train_np) 
-        cluster_centers = cluster.cluster_centers_
-        cluster_labels = cluster.labels_ 
+        output_train_np = output_train.cpu().numpy()
+        method = self.args.cluster_method or default_method(self.args.dataset)
+        self.args.cluster_method = method
+        (cluster_labels, info), t_clu = timed(run_clustering, output_train_np, self.nnodes_syn, method, self.args.seed,
+            dataset=self.args.dataset, minibatch=self.args.cluster_minibatch, eps=self.args.balance_eps,
+            max_iter=self.args.balance_iters, device=self.device)
+        cluster_centers = cluster_means(output_train_np, cluster_labels, self.nnodes_syn)
+        info.update(cluster_stats(output_train_np, cluster_labels, self.nnodes_syn, np.asarray(data.labels_train), data.nclass))
+        info['cluster_time'] = t_clu
+        self.cluster_info = info
+        print('[cluster]', method, {k: (round(v, 4) if isinstance(v, float) else v) for k, v in info.items()})
         # self.cluster_measure(cluster_labels)
         print("finish clustering")    
         # get the train nodes representations and labels 
@@ -456,6 +459,9 @@ class ClustGDD:
             res = np.array(res)
             print('Train/Test Mean Accuracy:',
                     repr([res.mean(0), res.std(0)]))
+            log_result(self.args, self.cluster_info, res,
+                       {'pretrain_time': t_pc - t1, 'refine_time': t2 - t_pc, 'total_time': t2 - t1,
+                        'max_mem_mb': max_memory / 1024 ** 2}, self.args.results_file)
             
         # print("start graph analysis ")
         feat_train, adj_np , labels = data.feat_full, data.adj_full, data.labels_full

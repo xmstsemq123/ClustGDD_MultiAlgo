@@ -13,6 +13,7 @@ import numpy as np
 from models.gcn import GCN,MLP
 # from models.sgc import SGC 
 from models.sgc_multi import SGC as SGC
+from clustering import run_clustering, cluster_stats, cluster_means, default_method, timed, log_result
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from scipy.sparse import coo_matrix
 
@@ -97,14 +98,17 @@ class ClustGDD:
         
          # do kmeans on the left eigen vector
         
-        output_np = output.cpu().numpy() 
-
-        if self.args.dataset == 'ogbn-arxiv':
-            cluster = MiniBatchKMeans(n_clusters=self.nnodes_syn, random_state=self.args.seed, batch_size=self.args.cluster_minibatch).fit(output_np)
-        else:
-            cluster = KMeans(n_clusters = self.nnodes_syn).fit(output_np) 
-        cluster_centers = cluster.cluster_centers_
-        cluster_labels = cluster.labels_ 
+        output_np = output.cpu().numpy()
+        method = self.args.cluster_method or default_method(self.args.dataset)
+        self.args.cluster_method = method
+        (cluster_labels, info), t_clu = timed(run_clustering, output_np, self.nnodes_syn, method, self.args.seed,
+            dataset=self.args.dataset, minibatch=self.args.cluster_minibatch, eps=self.args.balance_eps,
+            max_iter=self.args.balance_iters, device=self.device)
+        cluster_centers = cluster_means(output_np, cluster_labels, self.nnodes_syn)
+        info.update(cluster_stats(output_np, cluster_labels, self.nnodes_syn, np.asarray(data.labels_full), data.nclass))
+        info['cluster_time'] = t_clu
+        self.cluster_info = info
+        print('[cluster]', method, {k: (round(v, 4) if isinstance(v, float) else v) for k, v in info.items()})
 
         # self.cluster_measure(cluster_labels)
 
@@ -423,6 +427,9 @@ class ClustGDD:
             res = np.array(res)
             print('Train/Test Mean Accuracy:',
                     repr([res.mean(0), res.std(0)]))
+            log_result(self.args, self.cluster_info, res,
+                       {'pretrain_time': t_pc - t1, 'refine_time': t2 - t_pc, 'total_time': t2 - t1,
+                        'max_mem_mb': max_memory / 1024 ** 2}, self.args.results_file)
         print(f"The pretraining time is {t_pc-t1}")
         print(f"The refinement time is {t2-t_pc}")
         print("Total time is {}".format(t2-t1))
